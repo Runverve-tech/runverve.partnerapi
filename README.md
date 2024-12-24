@@ -9,7 +9,7 @@
 pip install -r requirements.txt
 ```
 
-3. Create a `.env` file in the root directory and add the following line, or use the default PostgreSQL URI
+3. Either use the deafult PostgreSQL URI in `.env` or use your custom PostgreSQL URI
 
 ```
 DATABASE_URI=<your-database-uri>
