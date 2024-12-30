@@ -355,7 +355,7 @@ def get_activities():
 @app.route("/activity/athletes/<athlete_id>", methods=["GET"])
 def get_activities_by_athlete(athlete_id):
     
-    id_exists = User.query.get(athlete_id)
+    id_exists = db.session.query(User).filter_by(user_sk=athlete_id).first()
     
     if not id_exists:
         return jsonify({"error": "Invalid athlete ID"}), 400
