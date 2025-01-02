@@ -1,6 +1,6 @@
 import requests
 import os
-from werkzeug.utils import secure_filenames
+from werkzeug.utils import secure_filename
 
 # Strava App Credentials
 CLIENT_ID = '<your client id>'
