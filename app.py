@@ -2,14 +2,16 @@ from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import os
+from enum import Enum
+from typing import Optional, List, Dict, Any
 from dotenv import load_dotenv
+
 
 # Load environment variables from .env file
 load_dotenv()
 
 # Initialize Flask app
 app = Flask(__name__)
-
 # Load database URI directly from the environment variable
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URI')
 # Disable modification tracking overhead
@@ -156,7 +158,7 @@ def set_user_preferences(user_id):
             description=supplements_data["description"]
         )
         db.session.add(supplements)
-        db.commit()
+        db.session.commit()
     else:
         supplements = None
         
@@ -324,6 +326,127 @@ def delete_user_preferences(user_id):
     
     return jsonify({"message": "User preferences deleted successfully."}), 200
 
+#Injuryreporting 
+class InjuryReport(db.Model):
+    __tablename__ = 'injury_report_1'
+    id = db.Column(db.Integer, primary_key=True)
+    user_sk = db.Column(db.Integer, db.ForeignKey('users.user_sk'), nullable=False)
+    injury_id = db.Column(db.Integer, db.ForeignKey('injuries.id'), nullable=False)
+    injury_location = db.Column(db.String(100), nullable=False)
+    reported_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationship to fetch injury details
+    injury = db.relationship('Injuries', backref='injury_reports')
+
+
+@app.route('/user/injuries', methods=['POST'])
+def report_injury():
+    data = request.get_json()
+
+    # Validate required fields
+    user_sk = data.get('user_sk')
+    injuries = data.get('injuries')
+
+    if not user_sk:
+        return jsonify({"error": "'user_sk' is required."}), 400
+
+    if not injuries or not isinstance(injuries, list):
+        return jsonify({"error": "'injuries' must be a list of injury objects."}), 400
+
+    # Check if user exists
+    user = User.query.filter_by(user_sk=user_sk).first()
+    if not user:
+        return jsonify({"error": "User not found."}), 404
+
+    response = []
+
+    # Process each injury in the list
+    for injury_data in injuries:
+        injury_id = injury_data.get('injury_id')
+        injury_location = injury_data.get('injury_location')
+
+        if not injury_id or not injury_location:
+            response.append({"error": "Each injury must include 'injury_id' and 'injury_location'."})
+            continue
+
+        # Fetch injury details from the Injuries table
+        injury = Injuries.query.filter_by(id=injury_id).first()
+        if not injury:
+            response.append({"error": f"Injury with id {injury_id} not found."})
+            continue
+
+        # Create a new injury report entry
+        injury_report = InjuryReport(
+            user_sk=user_sk,
+            injury_id=injury_id,
+            injury_location=injury_location
+        )
+        db.session.add(injury_report)
+
+        # Add injury report response
+        response.append({
+            "injury_id": injury_id,
+            "injury_location": injury_location,
+            "injury_type": {
+                "tennis_elbow": injury.tennis_elbow,
+                "muscle_strain": injury.muscle_strain,
+                "bicep_tendonitis": injury.bicep_tendonitis,
+                "fracture": injury.fracture,
+                "forearm_strain": injury.forearm_strain
+            },
+            "status": "Injury report submitted successfully."
+        })
+
+    # Commit all injury reports
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Failed to save injury reports: {str(e)}"}), 500
+
+    return jsonify(response), 200
+
+#HydrationLogs
+
+class HydrationLogs(db.Model):
+    __tablename__ = 'hydration_logs1'
+    id = db.Column(db.Integer, primary_key=True)
+    user_sk = db.Column(db.Integer, nullable=False)  # Keep user_sk but remove the foreign key
+    quantity = db.Column(db.Integer, nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+@app.route('/user/hydration', methods=['POST'])
+def log_hydration():
+    data = request.get_json()
+    
+    user_sk = data.get('user_sk')
+    quantity = data.get('quantity')
+    
+    if not user_sk:
+        return jsonify({"error": "'user_sk' is required."}), 400
+    
+    if not quantity or not isinstance(quantity, int):
+        return jsonify({"error": "'quantity' is required and must be an integer."}), 400
+    
+    # Log hydration without checking for user existence
+    hydration_log = HydrationLogs(user_sk=user_sk, quantity=quantity)
+    db.session.add(hydration_log)
+    
+    # Commit changes to database
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Failed to log hydration: {str(e)}"}), 500
+    
+    return jsonify({
+        "message": "Water intake logged successfully.",
+        "user_sk": user_sk,
+        "quantity": quantity
+    }), 200
+
+with app.app_context():
+    db.create_all()
 
 if __name__ == '__main__':
     app.run(debug=True)
