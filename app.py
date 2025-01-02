@@ -1,11 +1,10 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, redirect, render_template, session,Response
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import os
 from enum import Enum
 from typing import Optional, List, Dict, Any
 from dotenv import load_dotenv
-
 
 # Load environment variables from .env file
 load_dotenv()
@@ -16,13 +15,54 @@ app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URI')
 # Disable modification tracking overhead
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.secret_key=os.getenv('SECRET_KEY' , 'ABCD')
 
-# Initialize SQLAlchemy with the Flask app
+app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Max file size 16MB
+
+CLIENT_ID = '<your client id>'
+CLIENT_SECRET = '<your client secret>'
+REDIRECT_URI = 'http://localhost:5000/exchange_token'
+GOOGLE_API_KEY = '<your api key>'
+
 db = SQLAlchemy(app)
+migrrate = Migrate(app,db)
+
+@app.route('/')
+def home():
+    auth_url = api.generate_auth_url()
+    print(session.get('email'))
+    return redirect(auth_url)
+
+@app.route('/exchange_token')
+def exchange_token():
+    code = request.args.get('code')
+    if code:
+        token_data = api.exchange_token(code)
+        if token_data:
+            access_token = token_data.get("access_token")
+            user_data = api.get_user_data(access_token) 
+            user_sk = user_data.get("id")  
+            user = User.query.filter_by(user_sk=user_sk).first()
+            if user is None:
+                user = User(
+                    user_sk=user_sk,
+                    username=user_data.get("username"),
+                    email=user_data.get("email") or "unknown@example.com"
+                )
+                db.session.add(user)
+                db.session.commit()
+
+            # Store `user_sk` in the session
+            session['user_sk'] = user_sk
+
+            return render_template('upload_photos.html', access_token=access_token)
+        else:
+            return "Error exchanging code for token", 400
+    else:
+        return "Error: No authorization code received", 400
 
 # Define the User model
-
-
 class User(db.Model):
     __tablename__ = 'users'
     user_sk = db.Column(db.Integer, primary_key=True)
@@ -67,46 +107,40 @@ class Activity(db.Model):
     description = db.Column(db.Text)
     calories = db.Column(db.Float)
 
-# Define the User Preferences model
 
+class photo2(db.Model):
+    pid = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_sk = db.Column(db.Integer, db.ForeignKey('users.user_sk'), nullable=False)
+    filename = db.Column(db.String(255), nullable=False)
+    photo_data = db.Column(db.LargeBinary, nullable=False)
 
-class UserPreferences(db.Model):
-    __tablename__ = 'user_preferences'
+class GeocodingResult(db.Model):
+    __tablename__ = 'geocoding_results'
+
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.String(50), unique=True, nullable=False)
-    supplements_id = db.Column(db.Integer, db.ForeignKey('supplements.id'))
-    shoe_type_id = db.Column(db.Integer, db.ForeignKey('shoe_type.id'))
-    injuries_id = db.Column(db.Integer, db.ForeignKey('injuries.id'))
-    running_surface = db.Column(db.String(100), nullable=False)
+    formatted_address = db.Column(db.Text, nullable=False)
+    latitude = db.Column(db.Float, nullable=False)
+    longitude = db.Column(db.Float, nullable=False)
+    place_id = db.Column(db.Text, nullable=False)
+    types = db.Column(db.JSON, nullable=True)
+    address_components = db.Column(db.JSON, nullable=True)
+    plus_code = db.Column(db.JSON, nullable=True)
+    viewport = db.Column(db.JSON, nullable=True)
 
-    supplements = db.relationship('Supplements', backref='user_preferences')
-    shoe_type = db.relationship('ShoeType', backref='user_preferences')
-    injuries = db.relationship('Injuries', backref='user_preferences')
-    
-class Supplements(db.Model):
-    __tablename__ = 'supplements'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    model = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.Text, nullable=False)
 
-class ShoeType(db.Model):
-    __tablename__ = 'shoe_type'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    model = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.Text, nullable=False)
+class SupplementPhoto(db.Model):
+    __tablename__ = 'supplement_photos'
+    pic_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_sk = db.Column(db.Integer, db.ForeignKey('users.user_sk'), nullable=False)
+    filename = db.Column(db.String(255), nullable=False)
+    supplement_type = db.Column(db.String(100), nullable=False)
+    photo_data = db.Column(db.LargeBinary, nullable=False)
 
-class Injuries(db.Model):
-    __tablename__ = 'injuries'
-    id = db.Column(db.Integer, primary_key=True)
-    tennis_elbow = db.Column(db.Boolean, default=False)
-    muscle_strain = db.Column(db.Boolean, default=False)
-    bicep_tendonitis = db.Column(db.Boolean, default=False)
-    fracture = db.Column(db.Boolean, default=False)
-    forearm_strain = db.Column(db.Boolean, default=False)
-    
-# Routes to interact with users
+    # def __repr__(self):
+    #     return f"<SupplementPhoto {self.pic_id}>"
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
 
 @app.route('/users', methods=['POST'])
@@ -124,17 +158,65 @@ def get_users():
     return jsonify([{"user_sk": user.user_sk, "username": user.username, "email": user.email} for user in users])
 
 
+@app.route('/user/photos', methods=['POST'])
+def upload_photos():
+    if 'user_sk' not in session:
+        return jsonify({"message": "User not logged in"}), 401
+
+    user_sk = session['user_sk']  
+    if 'file' not in request.files:
+        return jsonify({"message": "No file part"}), 400
+    
+    file = request.files['file']
+    
+    if file.filename == '':
+        return jsonify({"message": "No selected file"}), 400
+    
+    if file and allowed_file(file.filename):
+        photo_data = file.read()
+        filename = secure_filename(file.filename)
+        new_photo = photo2(
+            user_sk=user_sk,
+            filename=filename,
+            photo_data=photo_data
+        )
+        db.session.add(new_photo)
+        db.session.commit()
+
+        return jsonify({"message": "File successfully uploaded", "photo_id": new_photo.pid,  }), 201
+    else:
+        return jsonify({"message": "File type not allowed"}), 400
+
+    
+@app.route('/user/photos', methods=['GET'])
+def render_photo_upload():
+    """Render the photo upload page."""
+    return render_template('upload_photos.html')
+
+@app.route('/user/photos/<int:photo_id>', methods=['GET'])
+def view_photo(photo_id):
+    photo = photo2.query.get(photo_id)
+    if not photo:
+        return jsonify({"message": "Photo not found"}), 404
+    
+    mime_type = None
+    if photo.filename.lower().endswith(('png', 'jpg', 'jpeg', 'gif')):
+        mime_type = f"image/{photo.filename.rsplit('.', 1)[1].lower()}"
+
+    if not mime_type:
+        return jsonify({"message": "Unsupported file type"}), 400
+
+    return Response(photo.photo_data, content_type=mime_type)
+
+
 @app.before_request
 def create_tables():
     db.create_all()
-    
-# Routes to set or update user preferences
 
 
-@app.route("/user/preferences/<user_id>",methods=["POST"])
-def set_user_preferences(user_id):
-    
-    # Set preferences for a specific user.
+
+@app.route('/geocode', methods=['POST'])
+def geocode():
     
     data = request.json
     if not data:
@@ -158,7 +240,7 @@ def set_user_preferences(user_id):
             description=supplements_data["description"]
         )
         db.session.add(supplements)
-        db.session.commit()
+        db.commit()
     else:
         supplements = None
         
@@ -187,144 +269,129 @@ def set_user_preferences(user_id):
         running_surface=data["running_surface"]
     )
 
-    db.session.add(user_preferences)
+    db.session.add(geocoding_entry)
     db.session.commit()
 
+    return jsonify({
+        "message": "Geocoding data stored successfully",
+        "stored_data": {
+            "formatted_address": geocoding_entry.formatted_address,
+            "latitude": geocoding_entry.latitude,
+            "longitude": geocoding_entry.longitude
+        }
+    }), 201
     
-    return jsonify({"message": "Preferences saved successfully."}), 200
+@app.route('/geocode', methods=['GET'])
+def get_geocoding_result():
+    """Retrieve geocoding data by place_id, coordinates, or formatted address."""
+ 
+    place_id = request.args.get('place_id')
+    lat = request.args.get('lat', type=float)
+    lng = request.args.get('lng', type=float)
+    formatted_address = request.args.get('formatted_address')
 
 
-@app.route("/user/preferences/<user_id>",methods=["GET"])
-def get_user_preferences(user_id):
+    if place_id:
+        result = GeocodingResult.query.filter_by(id=place_id).first()
+
+    elif lat is not None and lng is not None:
+        result = GeocodingResult.query.filter_by(latitude=lat, longitude=lng).first()
+    elif formatted_address:
+        result = GeocodingResult.query.filter_by(formatted_address=formatted_address).first()
+    else:
+        return jsonify({"error": "Please provide a place_id, latitude and longitude, or a formatted_address."}), 400
+
+    if not result:
+        return jsonify({"message": "No geocoding result found for the given input."}), 404
+
+    return jsonify({
+        "id": result.id,
+        "formatted_address": result.formatted_address,
+        "latitude": result.latitude,
+        "longitude": result.longitude,
+        "place_id": result.place_id,
+        "types": result.types,
+        "address_components": result.address_components,
+        "plus_code": result.plus_code,
+        "viewport": result.viewport
+    }), 200
+
+@app.route('/geocode/<int:id>', methods=['DELETE'])
+def delete_address(id):
+    """Delete an address by its ID."""
+    geocode_entry = GeocodingResult.query.get(id)
     
-    # Retrieve preferences for a specific user.
+    if not geocode_entry:
+        return jsonify({"message": "Address not found"}), 404
     
-    user_pref = UserPreferences.query.filter_by(user_id=user_id).first()
-    if not user_pref:
-        return jsonify({"error": "No preferences found for the specified user."}), 404
-    
-    response = {
-        "user_id": user_pref.user_id,
-        "supplements": {
-            "name": user_pref.supplements.name,
-            "model": user_pref.supplements.model,
-            "description": user_pref.supplements.description
-        } if user_pref.supplements else None,
-        "shoe_type": {
-            "name": user_pref.shoe_type.name,
-            "model": user_pref.shoe_type.model,
-            "description": user_pref.shoe_type.description
-        },
-        "injuries": {
-            "tennis_elbow": user_pref.injuries.tennis_elbow,
-            "muscle_strain": user_pref.injuries.muscle_strain,
-            "bicep_tendonitis": user_pref.injuries.bicep_tendonitis,
-            "fracture": user_pref.injuries.fracture,
-            "forearm_strain": user_pref.injuries.forearm_strain
-        },
-        "running_surface": user_pref.running_surface
-    }
-    
-    return jsonify({"preferences": response}), 200
-
-
-@app.route("/user/preferences",methods=["GET"])
-def get_all_user_preferences():
-    
-    # Retrieve preferences for all users.
-    
-    response = []
-    user_preferences = UserPreferences.query.all()
-    if not user_preferences:
-        return jsonify({"error": "No user preferences found."}), 404
-    
-    for user_pref in user_preferences:
-        response.append({
-            "user_id": user_pref.user_id,
-            "supplements": {
-                "name": user_pref.supplements.name,
-                "model": user_pref.supplements.model,
-                "description": user_pref.supplements.description
-            } if user_pref.supplements else None,
-            "shoe_type": {
-                "name": user_pref.shoe_type.name,
-                "model": user_pref.shoe_type.model,
-                "description": user_pref.shoe_type.description
-            },
-            "injuries": {
-                "tennis_elbow": user_pref.injuries.tennis_elbow,
-                "muscle_strain": user_pref.injuries.muscle_strain,
-                "bicep_tendonitis": user_pref.injuries.bicep_tendonitis,
-                "fracture": user_pref.injuries.fracture,
-                "forearm_strain": user_pref.injuries.forearm_strain
-            },
-            "running_surface": user_pref.running_surface
-        })
-
-    
-    return jsonify({"preferences": response}), 200
+    try:
+        db.session.delete(geocode_entry)
+        db.session.commit()
+        return jsonify({"message": f"Address with ID {id} successfully deleted"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"message": "Error deleting address", "error": str(e)}), 500
 
 
 
-@app.route("/user/preferences/<user_id>", methods=["PUT"])
-def modify_user_preferences(user_id):
-    
-    # Modify preferences for a specific user.
-    
-    data = request.json
-    if not data:
-        return jsonify({"error": "Invalid input. JSON data is required."}), 400
+@app.route('/user/supplements', methods=['POST'])
+def upload_supplement_photo():
+    """Allows users to upload photos of their supplements."""
+    if 'user_sk' not in session:
+        return jsonify({"message": "User not logged in"}), 401
 
-    user_pref = UserPreferences.query.filter_by(user_id=user_id).first()
-    if not user_pref:
-        return jsonify({"error": "User preferences not found."}), 404
+    user_sk = session['user_sk']  # Retrieve user_sk from session
 
-    # Update existing related records
-    if "supplements" in data:
-        supp_data = data["supplements"]
-        user_pref.supplements.name = supp_data.get("name", user_pref.supplements.name)
-        user_pref.supplements.model = supp_data.get("model", user_pref.supplements.model)
-        user_pref.supplements.description = supp_data.get("description", user_pref.supplements.description)
+    if 'file' not in request.files or 'supplement_type' not in request.form:
+        return jsonify({"message": "File and supplement type are required"}), 400
 
-    if "shoe_type" in data:
-        shoe_data = data["shoe_type"]
-        user_pref.shoe_type.name = shoe_data.get("name", user_pref.shoe_type.name)
-        user_pref.shoe_type.model = shoe_data.get("model", user_pref.shoe_type.model)
-        user_pref.shoe_type.description = shoe_data.get("description", user_pref.shoe_type.description)
+    file = request.files['file']
+    supplement_type = request.form['supplement_type']
 
-    if "injuries" in data:
-        injuries_data = data["injuries"]
-        user_pref.injuries.tennis_elbow = injuries_data.get("tennis_elbow", user_pref.injuries.tennis_elbow)
-        user_pref.injuries.muscle_strain = injuries_data.get("muscle_strain", user_pref.injuries.muscle_strain)
-        user_pref.injuries.bicep_tendonitis = injuries_data.get("bicep_tendonitis", user_pref.injuries.bicep_tendonitis)
-        user_pref.injuries.fracture = injuries_data.get("fracture", user_pref.injuries.fracture)
-        user_pref.injuries.forearm_strain = injuries_data.get("forearm_strain", user_pref.injuries.forearm_strain)
+    if file.filename == '':
+        return jsonify({"message": "No selected file"}), 400
 
-    if "running_surface" in data:
-        user_pref.running_surface = data["running_surface"]
+    if file and allowed_file(file.filename):
+        # Read the binary data and secure the filename
+        photo_data = file.read()
+        filename = secure_filename(file.filename)
 
-    db.session.commit()
+        # Create and save the photo in the database
+        new_photo = SupplementPhoto(
+            user_sk=user_sk,
+            filename=filename,
+            supplement_type=supplement_type,
+            photo_data=photo_data
+        )
+        db.session.add(new_photo)
+        db.session.commit()
 
-    return jsonify({"message": "Preferences modified successfully."}), 200
+        return jsonify({"message": "File successfully uploaded", "pic_id": new_photo.pic_id}), 201
+    else:
+        return jsonify({"message": "File type not allowed"}), 400
 
+@app.route('/user/supplements/<int:pic_id>', methods=['GET'])
+def view_supplement_photo(pic_id):
+    """Retrieve and display the uploaded supplement photo."""
+    photo = SupplementPhoto.query.get(pic_id)
+    if not photo:
+        return jsonify({"message": "Photo not found"}), 404
 
-@app.route("/user/preferences/<user_id>", methods=["DELETE"])
-def delete_user_preferences(user_id):
-    
-    # Delete preferences for a specific user.
-    
-    user_pref = UserPreferences.query.filter_by(user_id=user_id).first()
-    if not user_pref:
-        return jsonify({"error": "User preferences not found."}), 404
-    
-    db.session.delete(user_pref.supplements) if user_pref.supplements else None
-    db.session.delete(user_pref.shoe_type)
-    db.session.delete(user_pref.injuries)
-    
-    db.session.delete(user_pref)  # Delete the user preferences record itself
-    db.session.commit()
-    
-    return jsonify({"message": "User preferences deleted successfully."}), 200
+    # Determine the MIME type based on file extension
+    mime_type = None
+    if photo.filename.lower().endswith(('png', 'jpg', 'jpeg', 'gif')):
+        mime_type = f"image/{photo.filename.rsplit('.', 1)[1].lower()}"
+
+    if not mime_type:
+        return jsonify({"message": "Unsupported file type"}), 400
+
+    return Response(photo.photo_data, content_type=mime_type)
+
+@app.route('/user/supplements', methods=['GET'])
+def render_supplement_photo_upload():
+    """Render the supplement photo upload page."""
+    return render_template('upload_supplements.html')
+
 
 #Injuryreporting 
 class InjuryReport(db.Model):
@@ -449,4 +516,6 @@ with app.app_context():
     db.create_all()
 
 if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
     app.run(debug=True)
