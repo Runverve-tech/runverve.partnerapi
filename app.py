@@ -142,6 +142,23 @@ class SupplementPhoto(db.Model):
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
+class UserInfo(db.Model):
+    __tablename__ = 'user_info'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    username = db.Column(db.String(50), unique=True, nullable=False)
+    email_id = db.Column(db.String(100), unique=True, nullable=False)
+    password = db.Column(db.String(100), nullable=False)
+    gender = db.Column(db.String(10), nullable=True)
+    date_of_birth = db.Column(db.Date, nullable=True)
+    height = db.Column(db.Float, nullable=True)
+    weight = db.Column(db.Float, nullable=True)
+    experience_level = db.Column(db.String(50), nullable=True)
+    distance_goal = db.Column(db.Float, nullable=True)
+    preferences = db.Column(db.Text, nullable=True)
+    mobile_no = db.Column(db.String(15), nullable=True)
+
+
 
 @app.route('/users', methods=['POST'])
 def create_user():
@@ -207,6 +224,21 @@ def view_photo(photo_id):
         return jsonify({"message": "Unsupported file type"}), 400
 
     return Response(photo.photo_data, content_type=mime_type)
+
+@app.route('/user/photos/<int:photo_id>', methods=['DELETE'])
+def delete_photo(photo_id):
+    photo = photo2.query.get(photo_id)
+    if not photo:
+        return jsonify({"message": "Photo not found"}), 404
+    
+    try:
+        db.session.delete(photo)
+        db.session.commit()
+        return jsonify({"message": f"Photo with ID {photo_id} successfully deleted"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"message": "Error deleting photo", "error": str(e)}), 500
+
 
 
 @app.before_request
@@ -511,6 +543,136 @@ def log_hydration():
         "user_sk": user_sk,
         "quantity": quantity
     }), 200
+
+@app.route('/user/profile', methods=['GET'])
+def get_user():
+    """Retrieve a user profile by ID or username."""
+    user_id = request.args.get('id', type=int)
+    username = request.args.get('username', type=str)
+
+    if user_id:
+        user = UserInfo.query.get(user_id)
+    elif username:
+        user = UserInfo.query.filter_by(username=username).first()
+    else:
+        return jsonify({"message": "Please provide either 'id' or 'username' as a query parameter."}), 400
+
+    if not user:
+        return jsonify({"message": "User not found"}), 404
+
+    user_data = {
+        "username": user.username,
+        "email_id": user.email_id,
+        "gender": user.gender,
+        "date_of_birth": user.date_of_birth,
+        "height": user.height,
+        "weight": user.weight,
+        "experience_level": user.experience_level,
+        "distance_goal": user.distance_goal,
+        "preferences": user.preferences,
+        "mobile_no": user.mobile_no
+    }
+    return jsonify(user_data), 200
+
+
+
+@app.route('/user/profile', methods=['POST'])
+def create_user_profile():
+    """Create a new user profile."""
+    data = request.json
+    if not data:
+        return jsonify({"message": "Invalid input"}), 400
+
+    if UserInfo.query.filter_by(username=data.get('username')).first():
+        return jsonify({"message": "Username already exists"}), 400
+    if UserInfo.query.filter_by(email_id=data.get('email_id')).first():
+        return jsonify({"message": "Email already exists"}), 400
+
+    #Password must be at least 8 characters long, include a number, an uppercase letter, and a special character
+    password_regex = r'^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$' 
+    if not re.match(password_regex, data.get('password')):
+        return jsonify({"message": "Password must be at least 8 characters long, include a number, an uppercase letter, and a special character"}), 400
+
+    try:
+        height = float(data.get('height'))
+        weight = float(data.get('weight'))
+    
+    except (ValueError, TypeError):
+        return jsonify({"message": "Height and Weight and Number must be numeric"}), 400
+
+    
+    new_user = UserInfo(
+        username=data.get('username'),
+        email_id=data.get('email_id'),
+        password=data.get('password'),
+        gender=data.get('gender'),
+        date_of_birth=data.get('date_of_birth'),
+        height=height,
+        weight=weight,
+        experience_level=data.get('experience_level'),
+        distance_goal=data.get('distance_goal'),
+        preferences=data.get('preferences'),
+        mobile_no=data.get('mobile_no')
+    )
+
+    db.session.add(new_user)
+    db.session.commit()
+    return jsonify({"message": "User profile created successfully"}), 201
+
+
+
+
+@app.route('/user/profile/update', methods=['PUT'])
+def update_user_profile():
+    """Update a user profile by user ID."""
+    user_id = request.args.get('id', type=int)
+    user = UserInfo.query.get(user_id)
+    if not user:
+        return jsonify({"message": "User not found"}), 404
+
+    data = request.json
+    if 'username' in data:
+        if UserInfo.query.filter_by(username=data['username']).first() and user.username != data['username']:
+            return jsonify({"message": "Username already exists"}), 400
+        user.username = data['username']
+    
+    if 'password' in data:
+        if len(data['password']) < 8:
+            return jsonify({"message": "Password must be at least 8 characters long"}), 400
+        user.password = data['password']
+    
+    if 'height' in data:
+        try:
+            user.height = float(data['height'])
+        except ValueError:
+            return jsonify({"message": "Height must be a numeric value"}), 400
+    
+    if 'weight' in data:
+        try:
+            user.weight = float(data['weight'])
+        except ValueError:
+            return jsonify({"message": "Weight must be a numeric value"}), 400
+
+    if 'experience_level' in data:
+        user.experience_level = data['experience_level']
+    
+    if 'distance_goal' in data:
+        try:
+            user.distance_goal = float(data['distance_goal'])
+        except ValueError:
+            return jsonify({"message": "Distance goal must be a numeric value"}), 400
+
+    if 'preferences' in data:
+        user.preferences = data['preferences']
+    
+    if 'mobile_no' in data:
+        if len(data['mobile_no']) != 10 or not data['mobile_no'].isdigit():
+            return jsonify({"message": "Mobile number must be a 10-digit numeric value"}), 400
+        user.mobile_no = data['mobile_no']
+
+    db.session.commit()
+
+    return jsonify({"message": "User profile updated successfully"}), 200
 
 with app.app_context():
     db.create_all()
