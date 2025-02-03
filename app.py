@@ -22,8 +22,8 @@ app.secret_key=os.getenv('SECRET_KEY' , 'ABCD')
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Max file size 16MB
 
-CLIENT_ID = '142237'
-CLIENT_SECRET = '22fe1df9ef0d4f38aa160eb1b0ae96a921a92035'
+CLIENT_ID = 'CLIENT_ID'
+CLIENT_SECRET = 'CLIENT_SECRET'
 REDIRECT_URI = 'http://localhost:5000/exchange_token'
 GOOGLE_API_KEY = '<your api key>'
 
