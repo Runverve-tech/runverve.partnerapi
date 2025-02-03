@@ -5,6 +5,8 @@ import os
 from enum import Enum
 from typing import Optional, List, Dict, Any
 from dotenv import load_dotenv
+from flask_migrate import Migrate
+
 
 # Load environment variables from .env file
 load_dotenv()
@@ -20,13 +22,13 @@ app.secret_key=os.getenv('SECRET_KEY' , 'ABCD')
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Max file size 16MB
 
-CLIENT_ID = '<your client id>'
-CLIENT_SECRET = '<your client secret>'
+CLIENT_ID = '142237'
+CLIENT_SECRET = '22fe1df9ef0d4f38aa160eb1b0ae96a921a92035'
 REDIRECT_URI = 'http://localhost:5000/exchange_token'
 GOOGLE_API_KEY = '<your api key>'
 
 db = SQLAlchemy(app)
-migrrate = Migrate(app,db)
+migrate = Migrate(app,db)
 
 @app.route('/')
 def home():
@@ -138,6 +140,16 @@ class SupplementPhoto(db.Model):
 
     # def __repr__(self):
     #     return f"<SupplementPhoto {self.pic_id}>"
+class Injuries(db.Model):
+    __tablename__ = 'injuries'
+    id = db.Column(db.Integer, primary_key=True)
+    tennis_elbow = db.Column(db.Boolean, default=False)
+    muscle_strain = db.Column(db.Boolean, default=False)
+    bicep_tendonitis = db.Column(db.Boolean, default=False)
+    fracture = db.Column(db.Boolean, default=False)
+    forearm_strain = db.Column(db.Boolean, default=False)
+
+
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
@@ -434,7 +446,7 @@ class InjuryReport(db.Model):
     injury_location = db.Column(db.String(100), nullable=False)
     reported_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    # Relationship to fetch injury details
+    # Define the relationship AFTER Injuries is defined
     injury = db.relationship('Injuries', backref='injury_reports')
 
 
@@ -442,7 +454,6 @@ class InjuryReport(db.Model):
 def report_injury():
     data = request.get_json()
 
-    # Validate required fields
     user_sk = data.get('user_sk')
     injuries = data.get('injuries')
 
@@ -452,14 +463,12 @@ def report_injury():
     if not injuries or not isinstance(injuries, list):
         return jsonify({"error": "'injuries' must be a list of injury objects."}), 400
 
-    # Check if user exists
     user = User.query.filter_by(user_sk=user_sk).first()
     if not user:
         return jsonify({"error": "User not found."}), 404
 
     response = []
 
-    # Process each injury in the list
     for injury_data in injuries:
         injury_id = injury_data.get('injury_id')
         injury_location = injury_data.get('injury_location')
@@ -474,7 +483,6 @@ def report_injury():
             response.append({"error": f"Injury with id {injury_id} not found."})
             continue
 
-        # Create a new injury report entry
         injury_report = InjuryReport(
             user_sk=user_sk,
             injury_id=injury_id,
@@ -482,7 +490,6 @@ def report_injury():
         )
         db.session.add(injury_report)
 
-        # Add injury report response
         response.append({
             "injury_id": injury_id,
             "injury_location": injury_location,
@@ -496,7 +503,6 @@ def report_injury():
             "status": "Injury report submitted successfully."
         })
 
-    # Commit all injury reports
     try:
         db.session.commit()
     except Exception as e:
@@ -510,7 +516,7 @@ def report_injury():
 class HydrationLogs(db.Model):
     __tablename__ = 'hydration_logs1'
     id = db.Column(db.Integer, primary_key=True)
-    user_sk = db.Column(db.Integer, nullable=False)  # Keep user_sk but remove the foreign key
+    user_sk = db.Column(db.Integer, nullable=False)  
     quantity = db.Column(db.Integer, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -527,11 +533,9 @@ def log_hydration():
     if not quantity or not isinstance(quantity, int):
         return jsonify({"error": "'quantity' is required and must be an integer."}), 400
     
-    # Log hydration without checking for user existence
     hydration_log = HydrationLogs(user_sk=user_sk, quantity=quantity)
     db.session.add(hydration_log)
     
-    # Commit changes to database
     try:
         db.session.commit()
     except Exception as e:
