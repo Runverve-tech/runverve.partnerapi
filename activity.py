@@ -16,8 +16,6 @@ app = Flask(__name__)
 app.secret_key = os.getenv('SERVER_SECRET_KEY')
 
 
-
-
 # Load database URI directly from the environment variable
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URI')
 # Disable modification tracking overhead
@@ -69,10 +67,11 @@ def create_tables():
 
 @app.route("/activity", methods=["GET"])
 def get_activities():
-    activities = Activity.query.all()
     
-    if not activities:
-        jsonify({"error":  "No records under activities table."}), 404
+    try:
+       activities = Activity.query.all()
+    except:
+       return jsonify({"error": "Internal server error."}), 500
     
     return jsonify([{
         
@@ -93,15 +92,15 @@ def get_activities():
 @app.route("/activity/athletes/<athlete_id>", methods=["GET"])
 def get_activities_by_athlete(athlete_id):
     
-    id_exists = User.query.get(athlete_id)
+    try:
+       id_exists = User.query.get(athlete_id)
+    except:
+       return jsonify({"error": "Internal server error."}), 500
     
     if not id_exists:
         return jsonify({"error": "Invalid athlete ID"}), 400
     
     activities = Activity.query.filter_by(athlete_id=athlete_id)
-    
-    if not activities:
-        jsonify({"error": "No activity exists for the athlete."}), 404
     
     return jsonify([{
         
@@ -122,7 +121,12 @@ def get_activities_by_athlete(athlete_id):
 @app.route("/activity/<activity_id>", methods=["GET"])
 def get_activity_by_id(activity_id):
     
-    activity = Activity.query.filter_by(activity_id=activity_id).first()
+
+    try:
+       activity = Activity.query.filter_by(activity_id=activity_id).first()
+    except:
+       return jsonify({"error": "Internal server error."}), 500
+    
     
     if not activity:
         return jsonify({"error": "Activity not found."}), 404
@@ -156,7 +160,12 @@ def create_activity(athlete_id):
     }
     '''
     
-    id_exists = db.session.query(User).filter_by(user_sk=athlete_id).first()
+    try:
+        id_exists = db.session.query(User).filter_by(user_sk=athlete_id).first()
+    
+    except:
+        return jsonify({"error": "Internal server error."}), 500
+        
     
     
     if not id_exists:
@@ -187,7 +196,11 @@ def create_activity(athlete_id):
 @app.route("/activity/<activity_id>", methods=["DELETE"])
 def delete_activity(activity_id):
     
-    activity = Activity.query.filter_by(activity_id=activity_id).first()
+    try:
+       activity = Activity.query.filter_by(activity_id=activity_id).first()
+    except:
+       return jsonify({"error": "Internal server error."}), 500
+    
     
     if not activity:
         return jsonify({"error": "Activity not found."}), 404
