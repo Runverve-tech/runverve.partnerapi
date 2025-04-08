@@ -1,8 +1,8 @@
-## 📁 Runverve Backend Structure
+## Runverve Backend Structure
 
 ```
 runverve/
-├── .env                       # Environment variables (DO NOT expose in public repos)
+├── .env                       # Environment variables 
 ├── app.py                     # Main application file
 ├── config.py                  # Configuration settings
 ├── requirements.txt           # Python dependencies
@@ -48,14 +48,14 @@ runverve/
     ├── validators.py
     └── file_handlers.py
 ```
-## 🚀 Installation
+## Installation
 
 Follow these steps to set up and run the project locally:
 
 ### 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/runverve.git
-cd runverve
+git clone https://github.com/Runverve-tech/runverve.partnerapi.git
+cd runverve.partnerapi
 ```
 
 ### 2. Create a virtual environment:
