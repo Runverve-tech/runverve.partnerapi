@@ -2,17 +2,16 @@
 venv/
 .venv/
 
-# Environment variables
+# Environment variable files/folders
 env/
+.env
 
 # Python bytecode cache
 __pycache__/
-*/__pycache__/
 **/__pycache__/
 
-
 # Flask instance folder
-instance/           
+instance/
 
 # Flask migrations
 migrations/
