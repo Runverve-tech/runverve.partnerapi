@@ -36,7 +36,8 @@ class InjuryReport(db.Model):
     description = db.Column(db.Text)
     date_reported = db.Column(db.DateTime, default=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    user = db.relationship('models.user.User', backref='injuries_rel', lazy=True)
+    # In InjuryReport
+    user = db.relationship('User', backref=db.backref('injuries_rel', lazy=True, overlaps="injuries"))
 
     def to_dict(self):
         return {

@@ -1,7 +1,7 @@
 from flask import jsonify, request, session
 from extensions import db
 from models.user import User, UserInfo
-from models.preferences import UserPreferences
+from models.user_preferences import UserPreferences
 
 def create_user(username, email):
     """Create a new user"""

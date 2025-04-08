@@ -20,7 +20,7 @@ def create_app():
     
     # Import models here to ensure they're registered
     from models.user import User
-    from models.preferences import UserPreferences
+    from models.user_preferences import UserPreferences
     from models.supplements import Supplement, SupplementPhoto, UserSupplement
     from models.hydration import HydrationLog
     from models.shoe_type import ShoeType
