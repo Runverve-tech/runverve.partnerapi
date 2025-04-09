@@ -1,6 +1,6 @@
 from flask import jsonify, request
 from extensions import db
-from models.preferences import UserPreferences
+from models.user_preferences import UserPreferences
 from models.supplements import Supplement
 
 class PreferencesController:

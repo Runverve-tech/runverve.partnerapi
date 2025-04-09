@@ -55,5 +55,64 @@ def handle_activity(current_user, activity_id):
         db.session.commit()
         return '', 204
 
+@bp.route('/activities/update', methods=['PUT'])
+@token_required
+def update_activities(current_user):
+    try:
+        data = request.get_json()
+        if not isinstance(data, list):
+            return jsonify({'error': 'Expected an array of activities'}), 400
+
+        updated_activities = []
+        errors = []
+
+        for item in data:
+            activity_id = item.get('activity_id')
+            if not activity_id:
+                errors.append({'error': 'activity_id is required', 'data': item})
+                continue
+
+            activity = Activity.query.filter_by(
+                activity_id=activity_id,
+                athlete_id=current_user.user_sk
+            ).first()
+
+            if not activity:
+                errors.append({'error': f'Activity {activity_id} not found', 'data': item})
+                continue
+
+            # Define allowed fields
+            allowed_fields = {
+                'name', 'distance', 'moving_time', 'elapsed_time',
+                'total_elevation_gain', 'type', 'description', 'calories'
+            }
+
+            # Update fields
+            for key, value in item.items():
+                if key in allowed_fields and hasattr(activity, key):
+                    setattr(activity, key, value)
+            
+            updated_activities.append(activity)
+
+        if updated_activities:
+            db.session.commit()
+
+        response = {
+            'updated': [activity.to_dict() for activity in updated_activities],
+            'total_updated': len(updated_activities)
+        }
+        
+        if errors:
+            response['errors'] = errors
+
+        return jsonify(response), 200 if updated_activities else 400
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'error': 'Failed to update activities',
+            'details': str(e)
+        }), 500
+
 def init_app(app):
     app.register_blueprint(bp)
