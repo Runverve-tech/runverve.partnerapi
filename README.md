@@ -6,7 +6,8 @@ runverve/
 ├── app.py                     # Main application file
 ├── config.py                  # Configuration settings
 ├── requirements.txt           # Python dependencies
-├── models/                    # Database models
+├── models/                    # Database models 
+│   ├── __init__.py           
 │   ├── user.py
 │   ├── activity.py
 │   ├── user_preferences.py
