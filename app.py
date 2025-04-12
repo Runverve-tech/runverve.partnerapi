@@ -37,7 +37,8 @@ def create_app():
     from routes.geocoding import bp as geocoding_bp
     from routes.injuries import bp as injuries_bp
     from routes.activity import bp as activity_bp
-    from routes.spark_points import bp as spark_points_bp  # Add this import
+    from routes.spark_points import bp as spark_points_bp
+    from routes.health import bp as health_bp
     
     app.register_blueprint(auth_bp)
     app.register_blueprint(preferences_bp)
@@ -46,7 +47,8 @@ def create_app():
     app.register_blueprint(geocoding_bp)
     app.register_blueprint(injuries_bp)
     app.register_blueprint(activity_bp)
-    app.register_blueprint(spark_points_bp)  # Add this line
+    app.register_blueprint(spark_points_bp)
+    app.register_blueprint(health_bp)
     
     return app
 

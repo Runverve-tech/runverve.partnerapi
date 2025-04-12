@@ -1,0 +1,9 @@
+bind = "0.0.0.0:8000"
+workers = 4  # Generally (2 x num_cores) + 1
+worker_class = "sync"
+timeout = 120
+keepalive = 5
+errorlog = "-"  # stderr
+accesslog = "-"  # stdout
+loglevel = "info"
+reload = True  # Auto-reload on code changes
