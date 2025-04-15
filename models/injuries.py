@@ -29,15 +29,16 @@ class InjuryReport(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     user_sk = db.Column(db.Integer, db.ForeignKey('users.user_sk'), nullable=False)
-    
-    # Update relationship to use back_populates
-    user = db.relationship('User', back_populates='injuries')
+    injury_id = db.Column(db.Integer, db.ForeignKey('injuries.id'))
+    injury_location = db.Column(db.String(100))
     injury_type = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text)
     date_reported = db.Column(db.DateTime, default=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    # In InjuryReport
-    user = db.relationship('User', backref=db.backref('injuries_rel', lazy=True, overlaps="injuries"))
+    
+    # Add overlaps parameter to resolve the relationship conflict
+    user = db.relationship('User', backref=db.backref('injury_reports', overlaps="injuries"))
+    injury = db.relationship('Injuries', backref='reports')
 
     def to_dict(self):
         return {

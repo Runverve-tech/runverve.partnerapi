@@ -67,6 +67,9 @@ def handle_injury(current_user, injury_id):
 @bp.route('/injuries/report', methods=['GET', 'POST'])
 @token_required
 def handle_injury_reports(current_user):
+    if not current_user:
+        return jsonify({"error": "Authentication required"}), 401
+
     if request.method == 'GET':
         reports = InjuryReport.query.filter_by(user_sk=current_user.user_sk).all()
         return jsonify([report.to_dict() for report in reports])
@@ -75,6 +78,10 @@ def handle_injury_reports(current_user):
         data = request.get_json()
         if not data:
             return jsonify({"error": "No data provided"}), 400
+
+        # Validate required fields
+        if not data.get('injury_type'):
+            return jsonify({"error": "injury_type is required"}), 400
 
         report = InjuryReport(
             user_sk=current_user.user_sk,
