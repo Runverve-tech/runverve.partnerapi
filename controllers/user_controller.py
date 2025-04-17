@@ -51,81 +51,37 @@ def get_user_profile(user_id=None, username=None):
     except Exception as e:
         return {"error": str(e)}, 500
 
-def create_user_profile(data):
-    """Create a new user profile"""
-    try:
-        if UserInfo.query.filter_by(username=data.get('username')).first():
-            return {"message": "Username already exists"}, 400
-        if UserInfo.query.filter_by(email_id=data.get('email_id')).first():
-            return {"message": "Email already exists"}, 400
-
-        # Validation handled by utils.validators in the route
-
-        new_user = UserInfo(
-            username=data.get('username'),
-            email_id=data.get('email_id'),
-            password=data.get('password'),
-            gender=data.get('gender'),
-            date_of_birth=data.get('date_of_birth'),
-            height=float(data.get('height')),
-            weight=float(data.get('weight')),
-            experience_level=data.get('experience_level'),
-            distance_goal=data.get('distance_goal'),
-            preferences=data.get('preferences'),
-            mobile_no=data.get('mobile_no')
-        )
-
-        db.session.add(new_user)
-        db.session.commit()
-        return {"message": "User profile created successfully"}, 201
-    except Exception as e:
-        db.session.rollback()
-        return {"error": str(e)}, 500
-
-def update_user_profile(user_id, data):
-    """Update a user profile"""
-    try:
-        user = UserInfo.query.get(user_id)
-        if not user:
-            return {"message": "User not found"}, 404
-
-        # Username check
-        if 'username' in data:
-            existing_user = UserInfo.query.filter_by(username=data['username']).first()
-            if existing_user and existing_user.id != user_id:
-                return {"message": "Username already exists"}, 400
-            user.username = data['username']
-        
-        # Update other fields (validation handled by utils.validators in the route)
-        if 'password' in data:
-            user.password = data['password']
-        
-        if 'height' in data:
-            user.height = float(data['height'])
-        
-        if 'weight' in data:
-            user.weight = float(data['weight'])
-
-        if 'experience_level' in data:
-            user.experience_level = data['experience_level']
-        
-        if 'distance_goal' in data:
-            user.distance_goal = float(data['distance_goal'])
-
-        if 'preferences' in data:
-            user.preferences = data['preferences']
-        
-        if 'mobile_no' in data:
-            user.mobile_no = data['mobile_no']
-
-        db.session.commit()
-        return {"message": "User profile updated successfully"}, 200
-    except Exception as e:
-        db.session.rollback()
-        return {"error": str(e)}, 500
-
-
 class UserController:
+    @staticmethod
+    def create_user_profile(data):
+        try:
+            # Create new user profile
+            user = User(
+                email=data.get('email_id'),
+                username=data.get('username'),
+                first_name=data.get('first_name'),
+                last_name=data.get('last_name'),
+                mobile_no=data.get('mobile_no')
+            )
+            
+            db.session.add(user)
+            db.session.commit()
+            
+            return {
+                "message": "User profile created successfully",
+                "user": {
+                    "user_sk": user.user_sk,
+                    "email": user.email,
+                    "username": user.username,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "mobile_no": user.mobile_no
+                }
+            }, 201
+        except Exception as e:
+            db.session.rollback()
+            return {"error": str(e)}, 500
+
     @staticmethod
     def get_user_profile(user_sk):
         user = User.query.filter_by(user_sk=user_sk).first()

@@ -1,8 +1,8 @@
+
 from flask import Flask
 from flask_migrate import Migrate
 from extensions import db
 from config import Config
-from routes import init_app as init_routes
 from dotenv import load_dotenv
 import os
 
@@ -15,10 +15,11 @@ def create_app():
     # Set secret key for session management
     app.secret_key = Config.SECRET_KEY
     
+    # Initialize database
     db.init_app(app)
     Migrate(app, db)
     
-    # Import models here to ensure they're registered
+    # Import models to ensure they're registered with SQLAlchemy
     from models.user import User
     from models.user_preferences import UserPreferences
     from models.supplements import Supplement, SupplementPhoto, UserSupplement
@@ -29,7 +30,7 @@ def create_app():
     from models.activity import Activity
     from models.geocoding import GeocodingResult
     
-    # Register blueprints
+    # Import and register blueprints
     from routes.auth import bp as auth_bp
     from routes.preferences import bp as preferences_bp
     from routes.supplements import bp as supplements_bp
@@ -39,7 +40,9 @@ def create_app():
     from routes.activity import bp as activity_bp
     from routes.spark_points import bp as spark_points_bp
     from routes.health import bp as health_bp
+    from routes.user import bp as user_bp
     
+    # Register blueprints
     app.register_blueprint(auth_bp)
     app.register_blueprint(preferences_bp)
     app.register_blueprint(supplements_bp)
@@ -49,8 +52,9 @@ def create_app():
     app.register_blueprint(activity_bp)
     app.register_blueprint(spark_points_bp)
     app.register_blueprint(health_bp)
+    app.register_blueprint(user_bp, url_prefix='/user')  # Changed from '/users' to '/user'
     
-    return app
+    return app  # Add this line to return the app instance
 
 app = create_app()
 

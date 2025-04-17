@@ -5,12 +5,14 @@ from datetime import datetime
 
 class User(db.Model):
     __tablename__ = 'users'
-    __module__ = 'models.user'
-    
+
     user_sk = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(255), nullable=False)
+    first_name = db.Column(db.String(50))
+    last_name = db.Column(db.String(50))
+    mobile_no = db.Column(db.String(15))
+    password_hash = db.Column(db.String(255), nullable=True)  # Only one definition, made nullable
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     reset_token = db.Column(db.String(100), unique=True, nullable=True)
@@ -50,10 +52,10 @@ class UserInfo(db.Model):
     __module__ = 'models.user'
     
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    user_sk = db.Column(db.Integer, db.ForeignKey('users.user_sk'), nullable=False)  # Added foreign key
+    user_sk = db.Column(db.Integer, db.ForeignKey('users.user_sk'), nullable=False)
     username = db.Column(db.String(50), unique=True, nullable=False)
     email_id = db.Column(db.String(100), unique=True, nullable=False)
-    password = db.Column(db.String(100), nullable=False)
+    password = db.Column(db.String(100), nullable=True)  # Changed to nullable=True
     gender = db.Column(db.String(10), nullable=True)
     date_of_birth = db.Column(db.Date, nullable=True)
     height = db.Column(db.Float, nullable=True)
